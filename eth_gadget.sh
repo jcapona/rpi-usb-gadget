@@ -32,20 +32,29 @@ if ! grep -q "^denyinterfaces ${usb_interface_name}" "${rootfs_mount_point}/etc/
     echo "denyinterfaces ${usb_interface_name}" | tee -a "${rootfs_mount_point}/etc/dhcpcd.conf"
 fi
 
-echo """interface=usb0
+mkdir -p "/etc/dnsmasq.d/"
+if [[ ! -f "/etc/dnsmasq.d/usb" ]]; then
+    echo """interface=usb0
 dhcp-range=${usb_ip_base}.2,${usb_ip_base}.6,255.255.255.248,1h
 dhcp-option=3
-leasefile-ro""" | tee -a "/etc/dnsmasq/usb"
+leasefile-ro""" | tee -a "/etc/dnsmasq.d/usb"
+fi
 
-echo  """auto ${usb_interface_name}
+if [[ ! -f "${rootfs_mount_point}/etc/network/interfaces.d/${usb_interface_name}" ]]; then
+    echo  """auto ${usb_interface_name}
 allow-hotplug ${usb_interface_name}
 iface ${usb_interface_name} inet static
-  address ${static_usb_ip}
-  netmask 255.255.255.248""" | tee -a "${rootfs_mount_point}/etc/network/interfaces.d/${usb_interface_name}"
+address ${static_usb_ip}
+netmask 255.255.255.248""" | tee -a "${rootfs_mount_point}/etc/network/interfaces.d/${usb_interface_name}"
+fi
 
-echo "-- Writing /root/usb.sh script"
+usb_script_path="/root/usb.sh"
+echo "-- Writing ${usb_script_path} script"
 
-echo '
+if [[ -f "${usb_script_path}" ]]; then
+    rm "${usb_script_path}"
+fi
+echo -e """
 #!/bin/bash
 # taken from https://sausheong.github.io/posts/pi4-dev-ipadpro/
 
@@ -80,14 +89,12 @@ ln -s functions/ecm.${usb_interface_name} configs/c.1/
 ls /sys/class/udc > UDC 
 
 # start up ${usb_interface_name}
-ifup ${usb_interface_name} 
+ifconfig ${usb_interface_name} up
 # start dnsmasq
 service dnsmasq restart 
-' | tee -a "/root/usb.sh"
+""" | tee -a "${usb_script_path}"
 
-chmod +x "/root/usb.sh"
+chmod +x "${usb_script_path}"
 
 echo "-- Run /root/usb.sh ..."
 echo "-- Bye!"
-
-
